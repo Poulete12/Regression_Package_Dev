@@ -1,0 +1,25 @@
+Package: monotonePkg
+Type: Package
+Title: Broom & ggplot2 helpers for isotone regression
+Version: 0.0.0.9000
+Authors@R: 
+    person(given  = "Ton",
+           family = "Nom",
+           role   = c("aut", "cre"),
+           email  = "toi@mail.com")
+Description: S3 methods for broom (tidy, augment, glance) and ggplot2::autoplot
+    aimed at objects produced by isotone::gpava() and isotone::activeSet().
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    isotone,
+    broom,
+    ggplot2,
+    tibble,
+    dplyr
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
