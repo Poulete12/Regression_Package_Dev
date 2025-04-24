@@ -1,0 +1,171 @@
+---
+title: "rapport"
+---
+
+
+```{r}
+#| label: setup
+# Packages ────────────────────────────────────────────────────────────────────
+library(tidyverse)
+library(isotone)        # gpava() et activeSet()
+library(broom)          # tidy / glance / augment
+library(yardstick)      # métriques (rmse_vec, mae_vec, …)
+library(skimr)          # statistiques descriptives
+library(GGally)         # ggpairs
+library(RColorBrewer)   # palettes
+source("R/methods.R")
+
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
+col_names <- c("Sex","Length","Diameter","Height",
+               "Whole_weight","Shucked_weight",
+               "Viscera_weight","Shell_weight","Rings")
+abalone <- readr::read_csv(url, col_names = col_names) |>
+  mutate(Sex = factor(Sex),
+         Age = Rings + 1.5) |>
+  relocate(Age, .after = Rings)
+
+```
+
+
+
+```{r}
+skimr::skim(abalone)
+```
+
+
+```{r}
+ggplot(abalone, aes(Age)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "steelblue", alpha = .7) +
+  geom_density(colour = "firebrick", linewidth = 1) +
+  labs(title = "Distribution de l’âge estimé des ormeaux",
+       x = "Âge (années)", y = "Densité") +
+  theme_minimal()
+
+
+```
+
+```{r}
+lm_fit <- lm(Age ~ Sex + Length + Diameter + Height +
+               Whole_weight + Shucked_weight +
+               Viscera_weight + Shell_weight,
+             data = abalone)
+
+broom::tidy(lm_fit)
+broom::glance(lm_fit)
+
+
+```
+
+```{r}
+lm_fit <- lm(
+  Age ~ Sex + Length + Diameter + Height +
+    Whole_weight + Shucked_weight +
+    Viscera_weight + Shell_weight,
+  data = abalone
+)
+
+tidy(lm_fit)
+glance(lm_fit)
+
+
+```
+
+
+
+```{r}
+GGally::ggpairs(
+  abalone,
+  columns = c("Age","Length","Diameter","Height",
+              "Whole_weight","Shucked_weight",
+              "Viscera_weight","Shell_weight"),
+  aes(alpha = .2),
+  progress = FALSE
+) +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+iso_len <- gpava(z = abalone$Length, y = abalone$Age)
+
+autoplot(iso_len, step = TRUE)
+
+tidy(iso_len)
+augment(iso_len)
+glance(iso_len)
+
+rmse_iso_len <- yardstick::rmse_vec(abalone$Age, iso_len$x)
+rmse_iso_len
+
+
+
+```
+
+
+
+```{r}
+ord   <- order(abalone$Length, abalone$Whole_weight)
+pairs <- cbind(head(ord, -1), tail(ord, -1))
+
+fit_as <- activeSet(
+  pairs,
+  mySolver = "LS",
+  y        = abalone$Age,
+  weights  = rep(1, length(ord))
+)
+
+fit_as$x_pred <- abalone$Length
+autoplot(fit_as)
+
+
+tidy(fit_as)
+augment(fit_as)
+glance(fit_as)
+
+rmse_iso_as <- yardstick::rmse_vec(abalone$Age, fit_as$x)
+rmse_iso_as
+
+```
+```{r}
+# 2. Observations et prévisions
+df_obs <- tibble(
+  Length = abalone$Length,
+  Age    = abalone$Age
+)
+
+df_iso <- tibble(
+  Length = abalone$Length,
+  fitted = fit_as$x
+)
+
+# 3. Plot
+ggplot(df_obs, aes(Length, Age)) +
+  geom_point(alpha = .3) +
+  geom_line(data = df_iso, aes(Length, fitted),
+            size  = 1,
+            color = "red") +
+  theme_minimal() +
+  labs(
+    title = "Régression monotone multivariée (activeSet)",
+    x     = "Length",
+    y     = "Age"
+  )
+```
+
+
+
+```{r}
+pred_lm  <- augment(lm_fit, data = abalone)
+rmse_lm  <- yardstick::rmse_vec(pred_lm$Age, pred_lm$.fitted)
+
+tibble(
+  Modèle   = c("Linéaire","Isotone (Length)","Isotone (ActiveSet)"),
+  RMSE     = c(rmse_lm, rmse_iso_len, rmse_iso_as)
+)
+
+
+```
+
