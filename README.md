@@ -74,7 +74,6 @@ augment(iso)
 glance(iso)
 autoplot(iso)
 ```
-3. Tout ajout de code doit être couvert par des tests.
 
 ---
 
