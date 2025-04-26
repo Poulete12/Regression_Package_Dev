@@ -1,171 +1,251 @@
 ---
-title: "rapport"
+title: "Comparaison des régressions : linéaire vs isotonique sur le jeu de données Abalone"
+author: "Antony Lehmann & Asso Alli Mullud"
+lang: fr
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
 
+## 1. Introduction {-}
+
+Ce rapport a pour objectif de comparer trois approches de modélisation de l'âge des ormeaux : 
+
+1. un **modèle linéaire** simple,
+2. une **régression isotonique univariée** (Longueur → Âge),
+3. une **régression isotonique multivariée** (Active-Set) appliquée séparément aux mâles et aux femelles.
+
+Nous mesurerons la performance de chaque modèle par l’**erreur quadratique moyenne** (RMSE) et discuterons de l’intérêt de la contrainte de monotonie pour capturer la relation entre mensurations et âge.
+
+---
+
+## 2. Jeu de données et pré‑traitement {-}
+
+Le jeu **Abalone**, extrait du dépôt UCI, contient 4 177 observations d’ormeaux avec neuf variables : le sexe, huit mesures physiques et le nombre d’anneaux. Nous calculons l’âge par `Age = Rings + 1.5`.
 
 ```{r}
 #| label: setup
-# Packages ────────────────────────────────────────────────────────────────────
+#| appendix: true
 library(tidyverse)
-library(isotone)        # gpava() et activeSet()
-library(broom)          # tidy / glance / augment
-library(yardstick)      # métriques (rmse_vec, mae_vec, …)
-library(skimr)          # statistiques descriptives
-library(GGally)         # ggpairs
-library(RColorBrewer)   # palettes
+library(isotone)    # gpava(), activeSet()
+library(broom)      # tidy(), glance()
+library(yardstick)  # rmse_vec()
+library(skimr)
+library(GGally)
+library(glue)
 source("R/methods.R")
 
 url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
 col_names <- c("Sex","Length","Diameter","Height",
-               "Whole_weight","Shucked_weight",
-               "Viscera_weight","Shell_weight","Rings")
-abalone <- readr::read_csv(url, col_names = col_names) |>
-  mutate(Sex = factor(Sex),
-         Age = Rings + 1.5) |>
-  relocate(Age, .after = Rings)
-
+               "Whole_weight","Shucked_weight","Viscera_weight",
+               "Shell_weight","Rings")
+abalone <- read_csv(url, col_names = col_names) %>%
+  mutate(
+    Sex = factor(Sex, levels = c("M","F","I")),
+    Age = Rings + 1.5
+  ) |> relocate(Age, .after = Rings)
 ```
 
+---
 
+## 3. Analyse exploratoire {-}
+
+### 3.1. Aperçu des variables
 
 ```{r}
-skimr::skim(abalone)
+#| label: skim
+#| appendix: true
+skim(abalone)
 ```
 
+Quelques variables de pois présentent une asymétrie et la hauteur comporte des valeurs très faibles (< 0,02). Il conviendra de garder ces particularités en tête.
 
-```{r}
+### 3.2. Distribution de l’âge
+
+```{r }
+#| label: ggplot
+#| appendix: true
 ggplot(abalone, aes(Age)) +
-  geom_histogram(aes(y = after_stat(density)),
-                 bins = 30, fill = "steelblue", alpha = .7) +
-  geom_density(colour = "firebrick", linewidth = 1) +
-  labs(title = "Distribution de l’âge estimé des ormeaux",
-       x = "Âge (années)", y = "Densité") +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "steelblue", alpha = .7) +
+  geom_density(colour = "firebrick") +
+  labs(x = "Âge (années)", y = "Densité") +
   theme_minimal()
+```
+
+La majorité des ormeaux a entre 5 et 13 ans, avec une minorité jusqu’à 30 ans.
 
 
+---
+
+## 4. Modèle linéaire de référence {-}
+
+```{r }
+#| label: lm-model
+#| appendix: true
+lm_len  <- lm(Age ~ Length, data = abalone)
+rmse_lin <- rmse_vec(abalone$Age, predict(lm_len))
 ```
 
 ```{r}
-lm_fit <- lm(Age ~ Sex + Length + Diameter + Height +
-               Whole_weight + Shucked_weight +
-               Viscera_weight + Shell_weight,
-             data = abalone)
+#| label: plot-lm
+#| appendix: true
+ggplot(abalone, aes(Length, Age)) +
+  geom_point(alpha = .3) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen", size = 1) +
+  labs(x = "Longueur (cm)", y = "Âge (années)") +
+  theme_minimal()
+```
 
-broom::tidy(lm_fit)
-broom::glance(lm_fit)
+Le modèle linéaire explique **`r scales::percent(glance(lm_len)$r.squared,1)`** de la variance et obtient un **RMSE = `r round(rmse_lin,2)`** ans.
 
+---
 
+## 5. Régressions isotones {-}
+
+### 5.1. Isotone univariée (Longueur)
+
+```{r}
+#| label: iso-univ
+#| appendix: true
+iso_len <- gpava(z = abalone$Length, y = abalone$Age)
+rmse_iso <- rmse_vec(abalone$Age, iso_len$x)
+iso_len$x_pred <- abalone$Length
 ```
 
 ```{r}
-lm_fit <- lm(
-  Age ~ Sex + Length + Diameter + Height +
-    Whole_weight + Shucked_weight +
-    Viscera_weight + Shell_weight,
-  data = abalone
+#| label: iso-univ-plot
+#| appendix: true
+autoplot(iso_len, step = TRUE, residuals = FALSE) +
+  labs(
+    subtitle = paste0("RMSE = ", round(rmse_iso,2), " ans"),
+    x = "Longueur (cm)", y = "Âge (années)"
+  ) + theme_minimal()
+```
+
+Le RMSE passe de **`r round(rmse_lin,2)`** à **`r round(rmse_iso,2)`** ans.
+
+> **Visualisation comparative :** on superpose la droite de régression linéaire et la fonction en paliers issue de la régression isotone univariée.
+
+```{r}
+#| label: compare-univ-lin
+#| appendix: true
+# Préparation du data.frame comparatif
+df_cmp <- tibble(
+  Length = abalone$Length,
+  Age    = abalone$Age,
+  Lin    = predict(lm_len),
+  Iso    = iso_len$x
 )
 
-tidy(lm_fit)
-glance(lm_fit)
-
-
-```
-
-
-
-```{r}
-GGally::ggpairs(
-  abalone,
-  columns = c("Age","Length","Diameter","Height",
-              "Whole_weight","Shucked_weight",
-              "Viscera_weight","Shell_weight"),
-  aes(alpha = .2),
-  progress = FALSE
-) +
+# Tracé superposé
+ggplot(df_cmp, aes(x = Length, y = Age)) +
+  geom_point(alpha = .2) +
+  geom_line(aes(y = Lin), colour = "darkgreen", size = 1) +
+  geom_step(aes(y = Iso), colour = "firebrick", size = 1, direction = "hv") +
+  labs(
+    title = "Comparaison : régression linéaire vs isotone univariée",
+    x = "Longueur (cm)",
+    y = "Âge (années)"
+  ) +
   theme_minimal()
-
 ```
 
+*Cette figure met en évidence la capacité de la régression isotone à mieux suivre la relation empirique, notamment aux extrémités de la distribution.*
 
+### 5.2. Active-Set multivariée (mâles)
 
-```{r}
-iso_len <- gpava(z = abalone$Length, y = abalone$Age)
-
-autoplot(iso_len, step = TRUE)
-
-tidy(iso_len)
-augment(iso_len)
-glance(iso_len)
-
-rmse_iso_len <- yardstick::rmse_vec(abalone$Age, iso_len$x)
-rmse_iso_len
-
-
-
-```
-
-
+Nous analysons d’abord le sous-groupe des mâles en imposant une monotonie conjointe sur **Longueur**, **Poids total** et **Diamètre**.
 
 ```{r}
-ord   <- order(abalone$Length, abalone$Whole_weight)
+#| label: set-males
+#| appendix: true
+# Préparer les données
+abal_m <- abalone |> filter(Sex == "M")
+# Contraintes par tri lexicographique
+ord   <- order(abal_m$Length, abal_m$Whole_weight, abal_m$Diameter)
 pairs <- cbind(head(ord, -1), tail(ord, -1))
-
-fit_as <- activeSet(
-  pairs,
-  mySolver = "LS",
-  y        = abalone$Age,
+# Ajustement
+fit_m <- activeSet(
+  isomat   = pairs, mySolver = "LS",
+  y        = abal_m$Age,
   weights  = rep(1, length(ord))
 )
-
-fit_as$x_pred <- abalone$Length
-autoplot(fit_as)
-
-
-tidy(fit_as)
-augment(fit_as)
-glance(fit_as)
-
-rmse_iso_as <- yardstick::rmse_vec(abalone$Age, fit_as$x)
-rmse_iso_as
-
-```
-```{r}
-# 2. Observations et prévisions
-df_obs <- tibble(
-  Length = abalone$Length,
-  Age    = abalone$Age
-)
-
-df_iso <- tibble(
-  Length = abalone$Length,
-  fitted = fit_as$x
-)
-
-# 3. Plot
-ggplot(df_obs, aes(Length, Age)) +
-  geom_point(alpha = .3) +
-  geom_line(data = df_iso, aes(Length, fitted),
-            size  = 1,
-            color = "red") +
-  theme_minimal() +
+# RMSE
+fit_m$x_pred <- abal_m$Length
+rmse_m      <- rmse_vec(abal_m$Age, fit_m$x)
+# Tracé
+autoplot({ fit_m$x_pred <- abal_m$Length; fit_m }, step = TRUE, residuals = FALSE) +
   labs(
-    title = "Régression monotone multivariée (activeSet)",
-    x     = "Length",
-    y     = "Age"
-  )
+    title = "Active-Set multivariée (mâles)",
+    subtitle = paste0("RMSE = ", round(rmse_m,2), " ans"),
+    x = "Longueur (cm)", y = "Âge (années)"
+  ) + theme_minimal()
 ```
 
+Cette approche produit un RMSE de **`r round(rmse_m,2)`** ans pour les mâles.
 
+### 5.3. Active-Set multivariée (femelles)
+
+Même protocole pour le sous-groupe des femelles.
 
 ```{r}
-pred_lm  <- augment(lm_fit, data = abalone)
-rmse_lm  <- yardstick::rmse_vec(pred_lm$Age, pred_lm$.fitted)
+#| label: set-femelles
+#| appendix: true
+abal_f <- abalone |> filter(Sex == "F")
+ord_f   <- order(abal_f$Length, abal_f$Whole_weight, abal_f$Diameter)
+pairs_f <- cbind(head(ord_f, -1), tail(ord_f, -1))
+fit_f    <- activeSet(pairs_f, mySolver="LS", y=abal_f$Age, weights=rep(1,nrow(abal_f)))
+fit_f$x_pred <- abal_f$Length
+rmse_f      <- rmse_vec(abal_f$Age, fit_f$x)
+autoplot({ fit_f$x_pred <- abal_f$Length; fit_f }, step = TRUE, residuals = FALSE) +
+  labs(
+    title = "Active-Set multivariée (femelles)",
+    subtitle = paste0("RMSE = ", round(rmse_f,2), " ans"),
+    x = "Longueur (cm)", y = "Âge (années)"
+  ) + theme_minimal()
+```
 
+### 5.4. Comparaison mâles vs femelles
+
+| Sous-groupe | RMSE (ans)           |
+|------------|----------------------|
+| Mâles      | `r round(rmse_m,2)`  |
+| Femelles   | `r round(rmse_f,2)`  |
+
+*Interprétation :* les RMSE sont très proches, avec une légère supériorité pour **`r ifelse(rmse_m < rmse_f, 'les mâles', 'les femelles')`**, indiquant que le modèle Active-Set est robuste pour les deux sexes.
+
+---
+
+## 6. Synthèse des performances {-}
+
+```{r }
+#| label: tab-rmse
+#| appendix: true
 tibble(
-  Modèle   = c("Linéaire","Isotone (Length)","Isotone (ActiveSet)"),
-  RMSE     = c(rmse_lm, rmse_iso_len, rmse_iso_as)
-)
+  Modèle = c("Linéaire","Isotone (Longueur)","Active-Set (mâles)","Active-Set (femelles)"),
+  RMSE   = c(rmse_lin, rmse_iso, rmse_m, rmse_f)
+) |> knitr::kable(digits = 2, caption = "Comparaison des RMSE")
+```
 
+---
 
+## 7. Conclusion {-}
+
+La **régression isotonique** améliore le RMSE par rapport au modèle linéaire, et l’**Active-Set multivariée** conserve cette amélioration pour mâles et femelles. La robustesse et la cohérence des contraintes monotones en font une méthode pertinente pour la prédiction de l’âge à partir de mesures biologiques.
+
+---
+
+## Appendice : code complet {-}
+
+```{r}
+#| label: appendix
+#| ref.label: !expr knitr::all_labels(appendix==TRUE)
+#| echo: true
+#| eval: false
 ```
 
