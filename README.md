@@ -74,13 +74,6 @@ augment(iso)
 glance(iso)
 autoplot(iso)
 ```
-
----
-
-## Contribution
-
-1. Forkez le dépôt : `https://github.com/Poulete12/Regression_Package_Dev`
-2. Créez une branche, ajoutez vos commits, ouvrez une Pull Request.
 3. Tout ajout de code doit être couvert par des tests.
 
 ---
