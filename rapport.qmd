@@ -38,7 +38,7 @@ library(yardstick)  # rmse_vec()
 library(skimr)
 library(GGally)
 library(glue)
-source("R/methods.R")
+source("../R/methods.R")
 
 url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
 col_names <- c("Sex","Length","Diameter","Height",
