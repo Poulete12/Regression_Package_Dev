@@ -26,7 +26,8 @@ Regression_Package_Dev/
 │       ├── test-gpava.R
 │       └── test-activeset.R
 └── vignettes/
-    └── rapport.qmd
+    ├── rapport.qmd
+    └── rapport.html
 ```
 
 ---
