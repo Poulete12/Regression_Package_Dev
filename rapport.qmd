@@ -1,6 +1,6 @@
 ---
 title: "Comparaison des régressions : linéaire vs isotonique sur le jeu de données Abalone"
-author: "Antony Lehmann & Asso Alli Mullud"
+author: "Antony Lehmann & Asso Ali Mullud"
 lang: fr
 format:
   html:
