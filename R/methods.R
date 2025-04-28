@@ -1,5 +1,3 @@
-#' S3 helpers for isotone regression objects
-#'
 #' @description  Méthodes S3 pour \code{gpava} et \code{activeset}.
 #' @keywords internal
 "_PACKAGE"
@@ -79,13 +77,16 @@ autoplot.gpava <- function(object, step = FALSE, residuals = FALSE, ...) {
   df    <- tibble::tibble(x = x_vec, y = object$y, fitted = object$x)
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x, y)) +
-    ggplot2::geom_point(...)
+    ggplot2::geom_point(alpha = .25, size = .8)
 
   p <- if (step)
     p + ggplot2::geom_step(ggplot2::aes(y = fitted),
-                           direction = "hv", ...)
+                           direction = "hv",
+                           colour   = "blue",
+                           linewidth = 1)
   else
-    p + ggplot2::geom_line(ggplot2::aes(y = fitted), ...)
+    p + ggplot2::geom_line(ggplot2::aes(y = fitted),
+                           linewidth = 1)
 
   if (residuals)
     p <- p + ggplot2::geom_segment(
@@ -95,6 +96,7 @@ autoplot.gpava <- function(object, step = FALSE, residuals = FALSE, ...) {
   p + ggplot2::labs(x = "x", y = "y") +
     ggplot2::theme_minimal()
 }
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2.  Méthodes pour classe « activeset » --------------------------------------
@@ -135,13 +137,16 @@ autoplot.activeset <- function(object, step = TRUE,
                        object$y, object$x)
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x, y)) +
-    ggplot2::geom_point()
+    ggplot2::geom_point(alpha = .25, size = .8)      # ← ajouté
 
   p <- if (step)
     p + ggplot2::geom_step(ggplot2::aes(y = fitted),
-                           direction = "hv")
+                           direction = "hv",
+                           colour   = "red",
+                           linewidth = 1)            # ← ajouté
   else
-    p + ggplot2::geom_line(ggplot2::aes(y = fitted))
+    p + ggplot2::geom_line(ggplot2::aes(y = fitted),
+                           linewidth = 1)            # ← ajouté
 
   if (residuals)
     p <- p + ggplot2::geom_segment(
